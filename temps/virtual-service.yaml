@@ -1,0 +1,42 @@
+{{- range .Values.services }}
+{{- if .gateway.enabled }}
+  {{- $svc := . }}
+  {{- $gatewayNames := list }}
+  {{- $allHosts := list }}
+
+  {{- range .gateway.servers }}
+    {{- $gw := printf "%s-%s" $svc.name .ingressgateway }}
+    {{- $gatewayNames = append $gatewayNames $gw }}
+    {{- if kindIs "string" .hosts }}
+      {{- $allHosts = append $allHosts .hosts }}
+    {{- else }}
+      {{- range .hosts }}
+        {{- $allHosts = append $allHosts . }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ $svc.name }}
+  namespace: {{ $svc.namespace }}
+spec:
+  hosts:
+    {{- range $allHosts | uniq }}
+    - {{ . }}
+    {{- end }}
+  gateways:
+    {{- range $gatewayNames | uniq }}
+    - {{ . }}
+    {{- end }}
+  http:
+    - name: {{ $svc.name }}
+      route:
+        - destination:
+            host: {{ $svc.name }}
+            port:
+              number: {{ default 80 $svc.service.port }}
+---
+{{- end }}
+{{- end }}
