@@ -1,0 +1,72 @@
+{{- range .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  namespace: {{ .namespace }}
+  labels:
+    app: {{ .name }}
+spec:
+  replicas: {{ .replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+    spec:
+      containers:
+        - name: {{ .name }}
+          image: "{{ .image.repository }}:{{ .image.tag }}"
+          imagePullPolicy: {{ .image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ .configMap }}
+            - secretRef:
+                name: {{ .secret }}
+          env:
+          ports:
+            - containerPort: {{ .service.port }}
+          resources:
+            limits:
+              cpu: {{ .resources.limits.cpu }}
+              memory: {{ .resources.limits.memory }}
+            requests:
+              cpu: {{ .resources.requests.cpu }}
+              memory: {{ .resources.requests.memory }}
+          {{- if .enableHealthCheck }}
+          readinessProbe:
+            httpGet:
+              path: {{ .readinessProbe.path }}
+              port: {{ .service.port }}
+              scheme: HTTP
+            initialDelaySeconds: {{ .readinessProbe.initialDelaySeconds | default 12 }}
+            timeoutSeconds: {{ .readinessProbe.timeoutSeconds | default 3 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .livenessProbe.path }}
+              port: {{ .service.port }}
+              scheme: HTTP
+            initialDelaySeconds: {{ .livenessProbe.initialDelaySeconds | default 60 }}
+          {{- end }}
+          {{- if .mount.enabled | default false }}
+          volumeMounts:
+            - name: {{ .name }}-config-volume
+              mountPath: {{ .mount.mountPath }}
+              subPath: {{ .mount.subPath }}
+              readOnly: true
+          {{- end }}
+      {{- if .mount.enabled | default false }}
+      volumes:
+        - name: {{ .name }}-config-volume
+          configMap:
+            defaultMode: 420
+            name: {{ .configMap }}
+      {{- end }}
+      imagePullSecrets:
+        {{- range $.Values.imagePullSecrets }}
+        - name: {{ .name }}
+        {{- end }}
+---
+{{- end }}
