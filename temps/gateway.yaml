@@ -1,0 +1,94 @@
+{{- range .Values.services }}
+{{- if .gateway.enabled }}
+{{- $svc := . }}
+{{- $ns := .namespace | default "default" }}
+
+{{- if .gateway.servers }}
+{{- $grouped := dict }}
+{{- range .gateway.servers }}
+  {{- $gw := .ingressgateway }}
+  {{- if not (hasKey $grouped $gw) }}
+    {{- $_ := set $grouped $gw (list .) }}
+  {{- else }}
+    {{- $_ := set $grouped $gw (append (get $grouped $gw) .) }}
+  {{- end }}
+{{- end }}
+
+{{- range $gwName, $servers := $grouped }}
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ printf "%s-%s" $svc.name $gwName }}
+  namespace: {{ $ns }}
+spec:
+  selector:
+    istio: {{ $gwName }}
+  servers:
+    {{- range $srv := $servers }}
+    - port:
+        number: {{ default 443 $srv.port }}
+        name: {{ default "https" $srv.name | default "https" }}-{{ $srv.credentialName }}
+        protocol: {{ default "HTTPS" $srv.protocol }}
+      hosts:
+        {{- if kindIs "string" $srv.hosts }}
+        - {{ $srv.hosts }}
+        {{- else }}
+        {{- range $srv.hosts }}
+        - {{ . }}
+        {{- end }}
+        {{- end }}
+      tls:
+        mode: {{ default "SIMPLE" $srv.tlsMode }}
+        credentialName: {{ $srv.credentialName }}
+    {{- end }}
+---
+{{- end }}
+
+{{- else }}
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ .name }}
+  namespace: {{ .namespace }}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    {{- if and (hasKey $.Values "onprem") $.Values.onprem }}
+    # On-prem: only HTTPS with SIMPLE TLS
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        {{- range .gateway.hosts }}
+        - {{ . }}
+        {{- end }}
+      tls:
+        mode: SIMPLE
+        credentialName: {{ .gateway.credentialName }}
+    {{- else }}
+    # Default: HTTP redirect to HTTPS, and full HTTPS server
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        {{- range .gateway.hosts }}
+        - {{ . }}
+        {{- end }}
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTP
+      hosts:
+        {{- range .gateway.hosts }}
+        - {{ . }}
+        {{- end }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}
