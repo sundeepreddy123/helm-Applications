@@ -1,0 +1,49 @@
+services:
+  - name: test-1
+    replicaCount: 1
+    image:
+      repository: nginx
+      pullPolicy: IfNotPresent
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+    readinessProbe:
+      initialDelaySeconds: 12
+      timeoutSeconds: 3
+    livenessProbe:
+      initialDelaySeconds: 60
+    enableHealthCheck: false
+    ProbePath: /health
+    mount: 
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 80
+      targetMemoryUtilizationPercentage: 80
+    configMap: test1-config
+    secret: test1-secret
+    configMapData:
+      key1: value1
+      key2: value2
+    secretData:
+      ApplicationInsights__InstrumentationKey: $ApplicationInsights__InstrumentationKey
+      APPLICATIONINSIGHTS_CONNECTION_STRING: $APPLICATIONINSIGHTS_CONNECTION_STRING
+    gateway:
+      enabled: true
+      ingressgateway: ingress
+      hosts:
+        - gameplay-c1.dev.almondgamingstudio.com
+
+imagePullSecrets:
+  - name: regcred
+cluster_name: "dev"
